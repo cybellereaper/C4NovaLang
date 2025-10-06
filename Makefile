@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-std=c11 -Wall -Wextra -Iinclude
 SRC=$(wildcard src/*.c)
-TOOLS=build/nova-fmt build/nova-repl
+TOOLS=build/nova-fmt build/nova-repl build/nova-lsp
 
 all: build/tests $(TOOLS)
 
@@ -13,6 +13,9 @@ build/nova-fmt: $(SRC) tools/nova_fmt.c | build
 
 build/nova-repl: $(SRC) tools/nova_repl.c | build
 	$(CC) $(CFLAGS) $(SRC) tools/nova_repl.c -o $@
+
+build/nova-lsp: $(SRC) tools/nova_lsp.c | build
+	$(CC) $(CFLAGS) $(SRC) tools/nova_lsp.c -o $@
 
 build:
 	mkdir -p build

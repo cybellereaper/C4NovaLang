@@ -66,6 +66,9 @@ static bool emit_expr(FILE *out, const NovaSemanticContext *semantics, const Nov
             fputs("\"\"", out);
         }
         return true;
+    case NOVA_IR_EXPR_UNIT:
+        fputs("0", out);
+        return true;
     case NOVA_IR_EXPR_IDENTIFIER:
         emit_token(out, expr->as.identifier);
         return true;
@@ -78,6 +81,34 @@ static bool emit_expr(FILE *out, const NovaSemanticContext *semantics, const Nov
         }
         fputc(')', out);
         return true;
+    case NOVA_IR_EXPR_IF: {
+        NovaIRExpr *cond = expr->as.if_expr.condition;
+        if (cond && cond->kind == NOVA_IR_EXPR_BOOL) {
+            if (cond->as.bool_value) {
+                return emit_expr(out, semantics, expr->as.if_expr.then_branch);
+            }
+            if (expr->as.if_expr.else_branch) {
+                return emit_expr(out, semantics, expr->as.if_expr.else_branch);
+            }
+            fputs("0", out);
+            return true;
+        }
+        fputc('(', out);
+        if (!emit_expr(out, semantics, expr->as.if_expr.condition)) return false;
+        fputs(" ? ", out);
+        if (!emit_expr(out, semantics, expr->as.if_expr.then_branch)) return false;
+        fputs(" : ", out);
+        if (expr->as.if_expr.else_branch) {
+            if (!emit_expr(out, semantics, expr->as.if_expr.else_branch)) return false;
+        } else {
+            fputs("0", out);
+        }
+        fputc(')', out);
+        return true;
+    }
+    case NOVA_IR_EXPR_LIST:
+    case NOVA_IR_EXPR_MATCH:
+        return false;
     default:
         return false;
     }

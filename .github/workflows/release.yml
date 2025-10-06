@@ -5,63 +5,61 @@ on:
     tags:
       - 'v*'
 
-  release:
-    types: [created]
-
-  workflow_dispatch:
-
 permissions:
   contents: write
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            archive_ext: tar.gz
+          - os: windows-latest
+            target: windows-x86_64
+            archive_ext: zip
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Determine version
-        id: version
+      - name: Install build dependencies (Windows)
+        if: runner.os == 'Windows'
         run: |
-          if [ -n "${GITHUB_REF_NAME}" ]; then
-            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_ENV
-          elif [ -n "${GITHUB_EVENT_RELEASE_TAG_NAME}" ]; then
-            echo "version=${GITHUB_EVENT_RELEASE_TAG_NAME}" >> $GITHUB_ENV
-          else
-            echo "version=dev" >> $GITHUB_ENV
-          fi
+          choco install -y mingw make
+        shell: powershell
 
       - name: Build release artifacts
-        run: ./scripts/build_release.sh "${version}"
-
-      - name: Verify build outputs
-        run: ls -R dist || (echo "dist/ directory missing" && exit 1)
+        shell: bash
+        run: ./scripts/build_release.sh --target "${{ matrix.target }}" "${GITHUB_REF_NAME}"
 
       - name: Upload artifacts to workflow run
         uses: actions/upload-artifact@v4
         with:
-          name: nova-${{ env.version }}-linux-x86_64
-          path: dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz
+          name: nova-${{ github.ref_name }}-${{ matrix.target }}
+          path: dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}
 
       - name: Upload checksum to workflow run
         uses: actions/upload-artifact@v4
         with:
-          name: nova-${{ env.version }}-linux-x86_64-sha256
-          path: dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz.sha256
+          name: nova-${{ github.ref_name }}-${{ matrix.target }}-sha256
+          path: dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.version }}
-          name: NovaLang ${{ env.version }}
+          tag_name: ${{ github.ref_name }}
+          name: NovaLang ${{ github.ref_name }}
           draft: false
-          # no toLower(); use case-insensitive matching via regexmatch workaround
-          prerelease: ${{ contains(env.version, 'rc') || contains(env.version, 'RC') || contains(env.version, 'beta') || contains(env.version, 'BETA') }}
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
           files: |
-            dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz
-            dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz.sha256
+            dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}
+            dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

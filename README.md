@@ -63,17 +63,25 @@ will be baked into the archive name; if omitted, the script falls back to
 ./scripts/build_release.sh v0.1.0
 ```
 
-This command builds all NovaLang tools, assembles them under `dist/v0.1.0`, and
-creates a tarball plus a SHA-256 checksum file ready to be attached to a GitHub
-release. You can also use the Makefile wrapper:
+To produce Windows archives, pass `--target windows-x86_64` while running the
+script on a Windows machine (or in a Windows GitHub Actions runner):
 
 ```
-make release VERSION=v0.1.0
+./scripts/build_release.sh --target windows-x86_64 v0.1.0
+```
+
+Each invocation builds the NovaLang tools, assembles them under
+`dist/v0.1.0/<target>`, and creates an archive plus a SHA-256 checksum file
+ready to be attached to a GitHub release. You can also use the Makefile wrapper:
+
+```
+make release VERSION=v0.1.0 RELEASE_TARGET=windows-x86_64
 ```
 
 Push a tag that matches the version (for example, `git tag v0.1.0 && git push
 origin v0.1.0`) to trigger the included GitHub Actions workflow, which will
-upload the generated artifacts to a GitHub Release automatically.
+build both Linux and Windows archives and upload them to a GitHub Release
+automatically.
 
 ## Next Steps
 

@@ -72,6 +72,7 @@ ARCHIVE_PATH="$DIST_ROOT/$ARCHIVE_NAME"
 CHECKSUM_PATH="$ARCHIVE_PATH.sha256"
 
 rm -rf "$TARGET_DIR"
+mkdir -p "$DIST_ROOT"
 mkdir -p "$TARGET_DIR"
 rm -f "$ARCHIVE_PATH" "$CHECKSUM_PATH"
 
@@ -93,7 +94,7 @@ copy_binary() {
   fi
   local dest="$BIN_DIR/$(basename "$src")"
   cp "$src" "$dest"
-  if command -v strip >/dev/null 2>&1; then
+  if command -v strip >/dev/null 2>&1 && [[ "$TARGET" != windows-* ]]; then
     strip --strip-debug "$dest" || true
   fi
   chmod 755 "$dest" 2>/dev/null || true
@@ -129,12 +130,15 @@ NOTES
 if [[ "$TARGET" == "linux-x86_64" ]]; then
   tar -czf "$ARCHIVE_PATH" -C "$TARGET_DIR" .
 else
-  python - <<PY
+  TARGET_DIR="$TARGET_DIR" ARCHIVE_PATH="$ARCHIVE_PATH" python - <<'PY'
+import os
 import pathlib
 import zipfile
 
-target_dir = pathlib.Path(r"$TARGET_DIR")
-archive_path = pathlib.Path(r"$ARCHIVE_PATH")
+target_dir = pathlib.Path(os.environ["TARGET_DIR"]).resolve()
+archive_path = pathlib.Path(os.environ["ARCHIVE_PATH"]).resolve()
+archive_path.parent.mkdir(parents=True, exist_ok=True)
+
 with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
     for path in target_dir.rglob('*'):
         zf.write(path, path.relative_to(target_dir))
@@ -146,14 +150,14 @@ if command -v sha256sum >/dev/null 2>&1; then
 elif command -v shasum >/dev/null 2>&1; then
   shasum -a 256 "$ARCHIVE_PATH" > "$CHECKSUM_PATH"
 else
-  python - <<PY
+  ARCHIVE_PATH="$ARCHIVE_PATH" CHECKSUM_PATH="$CHECKSUM_PATH" python - <<'PY'
 import hashlib
+import os
 from pathlib import Path
 
-archive = Path(r"$ARCHIVE_PATH")
-checksum = archive.read_bytes()
-digest = hashlib.sha256(checksum).hexdigest()
-Path(r"$CHECKSUM_PATH").write_text(f"{digest}  {archive.name}\n")
+archive = Path(os.environ["ARCHIVE_PATH"]).resolve()
+digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+Path(os.environ["CHECKSUM_PATH"]).resolve().write_text(f"{digest}  {archive.name}\n")
 PY
 fi
 

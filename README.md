@@ -35,6 +35,8 @@ developer tooling.
     syntax.
   * `nova-repl` — interactive shell that reports the inferred type of
     expressions.
+  * `nova-new` — scaffolds a new NovaLang project with a manifest and sample
+    entry point that compiles end-to-end.
 * `tests/parser_tests.c` — end-to-end tests that cover parsing, semantics,
   exhaustiveness warnings, IR generation, and native code emission.
 * `Makefile` — builds tests and developer tools with `gcc`.
@@ -68,3 +70,6 @@ language-server features.
 * A new `nova-lsp` binary speaks a minimal subset of the Language Server
   Protocol, supporting initialise/shutdown and hover requests that surface the
   inferred type at a cursor position.
+* The code generator now invokes `cc` with `-O3` for more aggressive native
+  optimisations, and the IR lowerer performs constant-folding on `if` and simple
+  `match` expressions to eliminate dead branches before emission.

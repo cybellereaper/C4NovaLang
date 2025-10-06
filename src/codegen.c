@@ -165,7 +165,7 @@ bool nova_codegen_emit_object(const NovaIRProgram *program, const NovaSemanticCo
     }
     fclose(out);
     char command[PATH_MAX * 2];
-    snprintf(command, sizeof(command), "cc -std=c11 -c %s -o %s", c_path, object_path);
+    snprintf(command, sizeof(command), "cc -std=c11 -O3 -c %s -o %s", c_path, object_path);
     int result = system(command);
     if (result != 0) {
         if (error_buffer && error_buffer_size > 0) {

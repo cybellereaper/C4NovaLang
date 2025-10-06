@@ -27,6 +27,7 @@ static NovaIRExpr *nova_ir_expr_new(NovaIRExprKind kind, NovaTypeId type) {
 
 static NovaIRExpr *lower_expr(const NovaExpr *expr, const NovaSemanticContext *semantics);
 static void nova_ir_expr_free(NovaIRExpr *expr);
+static void optimize_ir_expr(NovaIRExpr **expr_ptr);
 
 static NovaTypeId infer_type_from_token(const NovaSemanticContext *semantics, const NovaToken *token) {
     if (!token) return semantics->type_unknown;
@@ -277,6 +278,87 @@ static NovaIRExpr *lower_expr(const NovaExpr *expr, const NovaSemanticContext *s
     }
 }
 
+static bool ir_expr_is_bool_constant(const NovaIRExpr *expr, bool *value) {
+    if (!expr || expr->kind != NOVA_IR_EXPR_BOOL) {
+        return false;
+    }
+    if (value) {
+        *value = expr->as.bool_value;
+    }
+    return true;
+}
+
+static void optimize_ir_expr(NovaIRExpr **expr_ptr) {
+    if (!expr_ptr || !*expr_ptr) {
+        return;
+    }
+    NovaIRExpr *expr = *expr_ptr;
+    switch (expr->kind) {
+    case NOVA_IR_EXPR_CALL:
+        for (size_t i = 0; i < expr->as.call.arg_count; ++i) {
+            optimize_ir_expr(&expr->as.call.args[i]);
+        }
+        break;
+    case NOVA_IR_EXPR_LIST:
+        for (size_t i = 0; i < expr->as.list.count; ++i) {
+            optimize_ir_expr(&expr->as.list.elements[i]);
+        }
+        break;
+    case NOVA_IR_EXPR_IF: {
+        optimize_ir_expr(&expr->as.if_expr.condition);
+        optimize_ir_expr(&expr->as.if_expr.then_branch);
+        optimize_ir_expr(&expr->as.if_expr.else_branch);
+        bool condition_value = false;
+        if (ir_expr_is_bool_constant(expr->as.if_expr.condition, &condition_value)) {
+            NovaIRExpr *selected = condition_value ? expr->as.if_expr.then_branch : expr->as.if_expr.else_branch;
+            NovaIRExpr *discard = condition_value ? expr->as.if_expr.else_branch : expr->as.if_expr.then_branch;
+            NovaIRExpr *condition = expr->as.if_expr.condition;
+            expr->as.if_expr.condition = NULL;
+            expr->as.if_expr.then_branch = NULL;
+            expr->as.if_expr.else_branch = NULL;
+            nova_ir_expr_free(condition);
+            nova_ir_expr_free(discard);
+            NovaIRExpr temp = *selected;
+            free(selected);
+            *expr = temp;
+            optimize_ir_expr(expr_ptr);
+            return;
+        }
+        break;
+    }
+    case NOVA_IR_EXPR_MATCH:
+        optimize_ir_expr(&expr->as.match_expr.scrutinee);
+        for (size_t i = 0; i < expr->as.match_expr.arm_count; ++i) {
+            optimize_ir_expr(&expr->as.match_expr.arms[i].body);
+        }
+        if (expr->as.match_expr.arm_count == 1 && expr->as.match_expr.arms) {
+            NovaIRMatchArm *arm = &expr->as.match_expr.arms[0];
+            if (arm->binding_count == 0) {
+                NovaIRExpr *scrutinee = expr->as.match_expr.scrutinee;
+                NovaIRExpr *body = arm->body;
+                free(arm->bindings);
+                free(expr->as.match_expr.arms);
+                expr->as.match_expr.arms = NULL;
+                expr->as.match_expr.arm_count = 0;
+                expr->as.match_expr.scrutinee = NULL;
+                nova_ir_expr_free(scrutinee);
+                NovaIRExpr temp = *body;
+                free(body);
+                *expr = temp;
+                optimize_ir_expr(expr_ptr);
+                return;
+            }
+        }
+        break;
+    case NOVA_IR_EXPR_NUMBER:
+    case NOVA_IR_EXPR_STRING:
+    case NOVA_IR_EXPR_BOOL:
+    case NOVA_IR_EXPR_UNIT:
+    case NOVA_IR_EXPR_IDENTIFIER:
+        break;
+    }
+}
+
 static void nova_ir_function_init(NovaIRFunction *fn) {
     fn->params = NULL;
     fn->param_count = 0;
@@ -365,6 +447,9 @@ NovaIRProgram *nova_ir_lower(const NovaProgram *program, const NovaSemanticConte
         fn->return_type = body_info ? body_info->type : semantics->type_unknown;
         fn->effects = body_info ? body_info->effects : NOVA_EFFECT_NONE;
         fn->body = lower_expr(decl->as.fun_decl.body, semantics);
+        if (fn->body) {
+            optimize_ir_expr(&fn->body);
+        }
     }
     return ir;
 }

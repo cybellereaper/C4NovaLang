@@ -1,16 +1,13 @@
 name: Release
 
 on:
-  # Runs when a tag like "v1.0.0" is pushed
   push:
     tags:
       - 'v*'
 
-  # Runs when a GitHub Release is created from the web UI
   release:
     types: [created]
 
-  # Optional — lets you trigger manually from Actions tab
   workflow_dispatch:
 
 permissions:
@@ -61,7 +58,8 @@ jobs:
           tag_name: ${{ env.version }}
           name: NovaLang ${{ env.version }}
           draft: false
-          prerelease: ${{ contains(toLower(env.version), 'rc') || contains(toLower(env.version), 'beta') }}
+          # no toLower(); use case-insensitive matching via regexmatch workaround
+          prerelease: ${{ contains(env.version, 'rc') || contains(env.version, 'RC') || contains(env.version, 'beta') || contains(env.version, 'BETA') }}
           files: |
             dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz
             dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz.sha256

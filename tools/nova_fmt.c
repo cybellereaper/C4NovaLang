@@ -34,9 +34,20 @@ static void write_indent(FILE *out, int indent) {
     }
 }
 
+static bool should_space_between(NovaTokenType prev, NovaTokenType current) {
+    if (prev == NOVA_TOKEN_EOF) return false;
+    if (prev == NOVA_TOKEN_LPAREN || prev == NOVA_TOKEN_LBRACKET) return false;
+    if (current == NOVA_TOKEN_RPAREN || current == NOVA_TOKEN_RBRACKET) return false;
+    if (current == NOVA_TOKEN_COMMA || current == NOVA_TOKEN_SEMICOLON) return false;
+    if (prev == NOVA_TOKEN_COMMA) return true;
+    if (prev == NOVA_TOKEN_DOT || current == NOVA_TOKEN_DOT) return false;
+    return true;
+}
+
 static void format_tokens(const NovaTokenArray *tokens, FILE *out) {
     int indent = 0;
     bool new_line = true;
+    NovaTokenType prev_type = NOVA_TOKEN_EOF;
     for (size_t i = 0; i < tokens->size; ++i) {
         NovaToken token = tokens->data[i];
         if (token.type == NOVA_TOKEN_EOF) break;
@@ -66,16 +77,36 @@ static void format_tokens(const NovaTokenArray *tokens, FILE *out) {
             fputc('\n', out);
             new_line = true;
             break;
+        case NOVA_TOKEN_COMMA:
+            fwrite(token.lexeme, 1, token.length, out);
+            fputc(' ', out);
+            new_line = false;
+            break;
+        case NOVA_TOKEN_ARROW:
+        case NOVA_TOKEN_ARROW_FN:
+            fputs(" -> ", out);
+            new_line = false;
+            break;
+        case NOVA_TOKEN_ELSE:
+            if (!new_line) {
+                fputc('\n', out);
+            }
+            write_indent(out, indent > 0 ? indent : 0);
+            fwrite(token.lexeme, 1, token.length, out);
+            fputc(' ', out);
+            new_line = false;
+            break;
         default:
             if (new_line) {
                 write_indent(out, indent);
                 new_line = false;
-            } else {
+            } else if (should_space_between(prev_type, token.type)) {
                 fputc(' ', out);
             }
             fwrite(token.lexeme, 1, token.length, out);
             break;
         }
+        prev_type = token.type;
     }
     if (!new_line) {
         fputc('\n', out);

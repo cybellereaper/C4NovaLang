@@ -55,3 +55,16 @@ representation, and exercises the native code generator.
 The next milestones focus on broadening expression lowering in the IR,
 covering more host-side optimisations, expanding the formatter, and layering in
 language-server features.
+
+## Recent Enhancements
+
+* The IR lowerer now understands conditional expressions, pipelines, match
+  arms, list literals, and unit values, providing richer inputs for later
+  compilation stages.
+* Host-side code generation folds `if` expressions with constant boolean
+  conditions and emits ternary expressions, reducing generated code size.
+* `nova-fmt` gained tighter spacing rules around commas, arrows, and braces for
+  more idiomatic output.
+* A new `nova-lsp` binary speaks a minimal subset of the Language Server
+  Protocol, supporting initialise/shutdown and hover requests that surface the
+  inferred type at a cursor position.

@@ -26,6 +26,7 @@ static NovaIRExpr *nova_ir_expr_new(NovaIRExprKind kind, NovaTypeId type) {
 }
 
 static NovaIRExpr *lower_expr(const NovaExpr *expr, const NovaSemanticContext *semantics);
+static void nova_ir_expr_free(NovaIRExpr *expr);
 
 static NovaTypeId infer_type_from_token(const NovaSemanticContext *semantics, const NovaToken *token) {
     if (!token) return semantics->type_unknown;
@@ -70,13 +71,30 @@ static NovaIRExpr *lower_literal(const NovaExpr *expr, const NovaSemanticContext
         break;
     }
     case NOVA_LITERAL_UNIT:
-        ir = nova_ir_expr_new(NOVA_IR_EXPR_NUMBER, type);
+        ir = nova_ir_expr_new(NOVA_IR_EXPR_UNIT, type);
+        break;
+    case NOVA_LITERAL_LIST: {
+        ir = nova_ir_expr_new(NOVA_IR_EXPR_LIST, type);
         if (ir) {
-            ir->as.number_value = 0.0;
+            size_t count = expr->as.literal.elements.count;
+            if (count > 0) {
+                ir->as.list.elements = calloc(count, sizeof(NovaIRExpr *));
+                if (!ir->as.list.elements) {
+                    nova_ir_expr_free(ir);
+                    return NULL;
+                }
+                ir->as.list.count = count;
+                for (size_t i = 0; i < count; ++i) {
+                    ir->as.list.elements[i] = lower_expr(expr->as.literal.elements.items[i], semantics);
+                    if (!ir->as.list.elements[i]) {
+                        nova_ir_expr_free(ir);
+                        return NULL;
+                    }
+                }
+            }
         }
         break;
-    case NOVA_LITERAL_LIST:
-        break;
+    }
     }
     return ir;
 }
@@ -105,6 +123,122 @@ static NovaIRExpr *lower_call(const NovaExpr *expr, const NovaSemanticContext *s
     return ir;
 }
 
+static NovaIRExpr *lower_if(const NovaExpr *expr, const NovaSemanticContext *semantics) {
+    const NovaExprInfo *info = nova_semantic_lookup_expr(semantics, expr);
+    NovaIRExpr *ir = nova_ir_expr_new(NOVA_IR_EXPR_IF, info ? info->type : 0);
+    if (!ir) return NULL;
+    ir->as.if_expr.condition = lower_expr(expr->as.if_expr.condition, semantics);
+    if (!ir->as.if_expr.condition) {
+        nova_ir_expr_free(ir);
+        return NULL;
+    }
+    ir->as.if_expr.then_branch = lower_expr(expr->as.if_expr.then_branch, semantics);
+    if (!ir->as.if_expr.then_branch) {
+        nova_ir_expr_free(ir);
+        return NULL;
+    }
+    if (expr->as.if_expr.else_branch) {
+        ir->as.if_expr.else_branch = lower_expr(expr->as.if_expr.else_branch, semantics);
+        if (!ir->as.if_expr.else_branch) {
+            nova_ir_expr_free(ir);
+            return NULL;
+        }
+    } else {
+        ir->as.if_expr.else_branch = nova_ir_expr_new(NOVA_IR_EXPR_UNIT, semantics->type_unit);
+        if (!ir->as.if_expr.else_branch) {
+            nova_ir_expr_free(ir);
+            return NULL;
+        }
+    }
+    return ir;
+}
+
+static NovaIRExpr *lower_pipeline(const NovaExpr *expr, const NovaSemanticContext *semantics) {
+    NovaIRExpr *current = lower_expr(expr->as.pipe.target, semantics);
+    if (!current) {
+        return NULL;
+    }
+    for (size_t i = 0; i < expr->as.pipe.stages.count; ++i) {
+        const NovaExpr *stage = expr->as.pipe.stages.items[i];
+        const NovaExpr *callee = stage;
+        NovaArgList args = { .items = NULL, .count = 0, .capacity = 0 };
+        if (stage->kind == NOVA_EXPR_CALL) {
+            callee = stage->as.call.callee;
+            args = stage->as.call.args;
+        }
+        if (!callee || callee->kind != NOVA_EXPR_IDENTIFIER) {
+            nova_ir_expr_free(current);
+            return NULL;
+        }
+        const NovaExprInfo *stage_info = nova_semantic_lookup_expr(semantics, stage);
+        NovaIRExpr *call = nova_ir_expr_new(NOVA_IR_EXPR_CALL, stage_info ? stage_info->type : 0);
+        if (!call) {
+            nova_ir_expr_free(current);
+            return NULL;
+        }
+        call->as.call.callee = callee->as.identifier.name;
+        size_t arg_count = 1 + args.count;
+        call->as.call.arg_count = arg_count;
+        call->as.call.args = calloc(arg_count, sizeof(NovaIRExpr *));
+        if (!call->as.call.args) {
+            nova_ir_expr_free(call);
+            return NULL;
+        }
+        call->as.call.args[0] = current;
+        for (size_t a = 0; a < args.count; ++a) {
+            call->as.call.args[a + 1] = lower_expr(args.items[a].value, semantics);
+            if (!call->as.call.args[a + 1]) {
+                nova_ir_expr_free(call);
+                return NULL;
+            }
+        }
+        current = call;
+    }
+    return current;
+}
+
+static NovaIRExpr *lower_match(const NovaExpr *expr, const NovaSemanticContext *semantics) {
+    const NovaExprInfo *info = nova_semantic_lookup_expr(semantics, expr);
+    NovaIRExpr *ir = nova_ir_expr_new(NOVA_IR_EXPR_MATCH, info ? info->type : 0);
+    if (!ir) return NULL;
+    ir->as.match_expr.scrutinee = lower_expr(expr->as.match_expr.scrutinee, semantics);
+    if (!ir->as.match_expr.scrutinee) {
+        nova_ir_expr_free(ir);
+        return NULL;
+    }
+    size_t arm_count = expr->as.match_expr.arms.count;
+    ir->as.match_expr.arm_count = arm_count;
+    if (arm_count > 0) {
+        ir->as.match_expr.arms = calloc(arm_count, sizeof(NovaIRMatchArm));
+        if (!ir->as.match_expr.arms) {
+            nova_ir_expr_free(ir);
+            return NULL;
+        }
+        for (size_t i = 0; i < arm_count; ++i) {
+            const NovaMatchArm *arm = &expr->as.match_expr.arms.items[i];
+            NovaIRMatchArm *ir_arm = &ir->as.match_expr.arms[i];
+            ir_arm->constructor = arm->name;
+            ir_arm->binding_count = arm->bindings.count;
+            if (ir_arm->binding_count > 0) {
+                ir_arm->bindings = calloc(ir_arm->binding_count, sizeof(NovaToken));
+                if (!ir_arm->bindings) {
+                    nova_ir_expr_free(ir);
+                    return NULL;
+                }
+                for (size_t b = 0; b < ir_arm->binding_count; ++b) {
+                    ir_arm->bindings[b] = arm->bindings.items[b].name;
+                }
+            }
+            ir_arm->body = lower_expr(arm->body, semantics);
+            if (!ir_arm->body) {
+                nova_ir_expr_free(ir);
+                return NULL;
+            }
+        }
+    }
+    return ir;
+}
+
 static NovaIRExpr *lower_expr(const NovaExpr *expr, const NovaSemanticContext *semantics) {
     if (!expr) return NULL;
     switch (expr->kind) {
@@ -121,13 +255,23 @@ static NovaIRExpr *lower_expr(const NovaExpr *expr, const NovaSemanticContext *s
     }
     case NOVA_EXPR_CALL:
         return lower_call(expr, semantics);
+    case NOVA_EXPR_PIPE:
+        return lower_pipeline(expr, semantics);
+    case NOVA_EXPR_IF:
+        return lower_if(expr, semantics);
     case NOVA_EXPR_BLOCK:
         if (expr->as.block.expressions.count == 0) {
-            return nova_ir_expr_new(NOVA_IR_EXPR_NUMBER, semantics->type_unit);
+            return nova_ir_expr_new(NOVA_IR_EXPR_UNIT, semantics->type_unit);
         }
         return lower_expr(expr->as.block.expressions.items[expr->as.block.expressions.count - 1], semantics);
     case NOVA_EXPR_PAREN:
         return lower_expr(expr->as.inner, semantics);
+    case NOVA_EXPR_MATCH:
+        return lower_match(expr, semantics);
+    case NOVA_EXPR_ASYNC:
+    case NOVA_EXPR_AWAIT:
+    case NOVA_EXPR_EFFECT:
+        return lower_expr(expr->as.unary.value, semantics);
     default:
         return NULL;
     }
@@ -145,12 +289,35 @@ static void nova_ir_expr_free(NovaIRExpr *expr) {
     case NOVA_IR_EXPR_STRING:
         free(expr->as.string_value.text);
         break;
+    case NOVA_IR_EXPR_LIST:
+        if (expr->as.list.elements) {
+            for (size_t i = 0; i < expr->as.list.count; ++i) {
+                nova_ir_expr_free(expr->as.list.elements[i]);
+            }
+            free(expr->as.list.elements);
+        }
+        break;
     case NOVA_IR_EXPR_CALL:
         if (expr->as.call.args) {
             for (size_t i = 0; i < expr->as.call.arg_count; ++i) {
                 nova_ir_expr_free(expr->as.call.args[i]);
             }
             free(expr->as.call.args);
+        }
+        break;
+    case NOVA_IR_EXPR_IF:
+        nova_ir_expr_free(expr->as.if_expr.condition);
+        nova_ir_expr_free(expr->as.if_expr.then_branch);
+        nova_ir_expr_free(expr->as.if_expr.else_branch);
+        break;
+    case NOVA_IR_EXPR_MATCH:
+        nova_ir_expr_free(expr->as.match_expr.scrutinee);
+        if (expr->as.match_expr.arms) {
+            for (size_t i = 0; i < expr->as.match_expr.arm_count; ++i) {
+                free(expr->as.match_expr.arms[i].bindings);
+                nova_ir_expr_free(expr->as.match_expr.arms[i].body);
+            }
+            free(expr->as.match_expr.arms);
         }
         break;
     default:

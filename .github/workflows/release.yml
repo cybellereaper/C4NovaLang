@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Build release artifacts
+        run: |
+          ./scripts/build_release.sh "${GITHUB_REF_NAME}"
+
+      - name: Upload artifacts to workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-${{ github.ref_name }}-linux-x86_64
+          path: dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-linux-x86_64.tar.gz
+
+      - name: Upload checksum to workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-${{ github.ref_name }}-linux-x86_64-sha256
+          path: dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-linux-x86_64.tar.gz.sha256
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: NovaLang ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
+          files: |
+            dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-linux-x86_64.tar.gz
+            dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-linux-x86_64.tar.gz.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

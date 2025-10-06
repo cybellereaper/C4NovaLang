@@ -1,9 +1,17 @@
 name: Release
 
 on:
+  # Runs when a tag like "v1.0.0" is pushed
   push:
     tags:
       - 'v*'
+
+  # Runs when a GitHub Release is created from the web UI
+  release:
+    types: [created]
+
+  # Optional — lets you trigger manually from Actions tab
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,31 +26,44 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Build release artifacts
+      - name: Determine version
+        id: version
         run: |
-          ./scripts/build_release.sh "${GITHUB_REF_NAME}"
+          if [ -n "${GITHUB_REF_NAME}" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          elif [ -n "${GITHUB_EVENT_RELEASE_TAG_NAME}" ]; then
+            echo "version=${GITHUB_EVENT_RELEASE_TAG_NAME}" >> $GITHUB_ENV
+          else
+            echo "version=dev" >> $GITHUB_ENV
+          fi
+
+      - name: Build release artifacts
+        run: ./scripts/build_release.sh "${version}"
+
+      - name: Verify build outputs
+        run: ls -R dist || (echo "dist/ directory missing" && exit 1)
 
       - name: Upload artifacts to workflow run
         uses: actions/upload-artifact@v4
         with:
-          name: nova-${{ github.ref_name }}-linux-x86_64
-          path: dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-linux-x86_64.tar.gz
+          name: nova-${{ env.version }}-linux-x86_64
+          path: dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz
 
       - name: Upload checksum to workflow run
         uses: actions/upload-artifact@v4
         with:
-          name: nova-${{ github.ref_name }}-linux-x86_64-sha256
-          path: dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-linux-x86_64.tar.gz.sha256
+          name: nova-${{ env.version }}-linux-x86_64-sha256
+          path: dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz.sha256
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: NovaLang ${{ github.ref_name }}
+          tag_name: ${{ env.version }}
+          name: NovaLang ${{ env.version }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
+          prerelease: ${{ contains(toLower(env.version), 'rc') || contains(toLower(env.version), 'beta') }}
           files: |
-            dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-linux-x86_64.tar.gz
-            dist/${{ github.ref_name }}/novalang-${{ github.ref_name }}-linux-x86_64.tar.gz.sha256
+            dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz
+            dist/${{ env.version }}/novalang-${{ env.version }}-linux-x86_64.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

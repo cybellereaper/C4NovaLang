@@ -52,6 +52,37 @@ The test suite parses representative NovaLang snippets, runs semantic analysis
 to validate inference and diagnostics, lowers to the intermediate
 representation, and exercises the native code generator.
 
+## Building Release Artifacts
+
+To produce a set of precompiled binaries and package them for distribution,
+run the release helper script. You can optionally provide a version number that
+will be baked into the archive name; if omitted, the script falls back to
+`git describe --tags --always`.
+
+```
+./scripts/build_release.sh v0.1.0
+```
+
+To produce Windows archives, pass `--target windows-x86_64` while running the
+script on a Windows machine (or in a Windows GitHub Actions runner):
+
+```
+./scripts/build_release.sh --target windows-x86_64 v0.1.0
+```
+
+Each invocation builds the NovaLang tools, assembles them under
+`dist/v0.1.0/<target>`, and creates an archive plus a SHA-256 checksum file
+ready to be attached to a GitHub release. You can also use the Makefile wrapper:
+
+```
+make release VERSION=v0.1.0 RELEASE_TARGET=windows-x86_64
+```
+
+Push a tag that matches the version (for example, `git tag v0.1.0 && git push
+origin v0.1.0`) to trigger the included GitHub Actions workflow, which will
+build both Linux and Windows archives and upload them to a GitHub Release
+automatically.
+
 ## Next Steps
 
 The next milestones focus on broadening expression lowering in the IR,

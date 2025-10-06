@@ -7,18 +7,56 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#else
 #include <unistd.h>
+#endif
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
 
+static bool is_separator(char c) {
+    return c == '/' || c == '\\';
+}
+
 static void normalize_path(char *path) {
     size_t len = strlen(path);
-    while (len > 1 && path[len - 1] == '/') {
+    for (size_t i = 0; i < len; ++i) {
+        if (path[i] == '\\') {
+            path[i] = '/';
+        }
+    }
+    while (len > 1 && is_separator(path[len - 1])) {
         path[len - 1] = '\0';
         --len;
     }
+}
+
+static int platform_mkdir(const char *path) {
+#ifdef _WIN32
+    char converted[PATH_MAX];
+    size_t len = strlen(path);
+    if (len >= sizeof(converted)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    for (size_t i = 0; i <= len; ++i) {
+        char c = path[i];
+        if (c == '/') {
+            c = '\\';
+        }
+        converted[i] = c;
+    }
+    if (_mkdir(converted) == 0) {
+        return 0;
+    }
+    return -1;
+#else
+    return mkdir(path, 0777);
+#endif
 }
 
 static int mkdir_p(const char *path) {
@@ -33,16 +71,22 @@ static int mkdir_p(const char *path) {
         return -1;
     }
     memcpy(buffer, path, len + 1);
-    for (char *p = buffer + 1; *p; ++p) {
-        if (*p == '/') {
+    size_t offset = 1;
+#ifdef _WIN32
+    if (len >= 2 && buffer[1] == ':') {
+        offset = 3; // skip the drive prefix (e.g., C:/)
+    }
+#endif
+    for (char *p = buffer + offset; *p; ++p) {
+        if (is_separator(*p)) {
             *p = '\0';
-            if (mkdir(buffer, 0777) != 0 && errno != EEXIST) {
+            if (platform_mkdir(buffer) != 0 && errno != EEXIST) {
                 return -1;
             }
             *p = '/';
         }
     }
-    if (mkdir(buffer, 0777) != 0 && errno != EEXIST) {
+    if (platform_mkdir(buffer) != 0 && errno != EEXIST) {
         return -1;
     }
     return 0;

@@ -2,6 +2,8 @@ CC=gcc
 CFLAGS=-std=c11 -Wall -Wextra -Iinclude
 SRC=$(wildcard src/*.c)
 TOOLS=build/nova-fmt build/nova-repl build/nova-lsp build/nova-new
+VERSION?=$(shell git describe --tags --always)
+RELEASE_TARGET?=linux-x86_64
 
 all: build/tests $(TOOLS)
 
@@ -22,6 +24,9 @@ build/nova-new: $(SRC) tools/nova_new.c | build
 
 build:
 	mkdir -p build
+
+release:
+	./scripts/build_release.sh --target $(RELEASE_TARGET) $(VERSION)
 
 clean:
 	rm -rf build

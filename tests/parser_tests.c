@@ -5,8 +5,14 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <limits.h>
-#include <unistd.h>
 #include <errno.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -74,6 +80,26 @@ static char *read_file_contents(const char *path) {
     return buffer;
 }
 
+static int nova_mkdir(const char *path, int mode) {
+#ifdef _WIN32
+    (void)mode;
+    if (_mkdir(path) == 0) {
+        return 0;
+    }
+    return -1;
+#else
+    return mkdir(path, mode);
+#endif
+}
+
+static long nova_process_id(void) {
+#ifdef _WIN32
+    return (long)_getpid();
+#else
+    return (long)getpid();
+#endif
+}
+
 static char *make_temp_dir(char *template) {
     size_t len = strlen(template);
     char *x_start = strchr(template, 'X');
@@ -84,13 +110,13 @@ static char *make_temp_dir(char *template) {
     size_t x_count = len - (size_t)(x_start - template);
     static unsigned long counter = 0;
     for (int attempt = 0; attempt < 4096; ++attempt) {
-        unsigned long value = (unsigned long)getpid() + counter + (unsigned long)attempt;
+        unsigned long value = (unsigned long)nova_process_id() + counter + (unsigned long)attempt;
         for (size_t i = 0; i < x_count; ++i) {
             unsigned digit = (unsigned)(value % 36);
             value /= 36;
             x_start[i] = (digit < 10) ? (char)('0' + digit) : (char)('a' + (digit - 10));
         }
-        if (mkdir(template, 0700) == 0) {
+        if (nova_mkdir(template, 0700) == 0) {
             counter += (unsigned long)(attempt + 1);
             return template;
         }

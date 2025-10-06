@@ -1,10 +1,10 @@
 # NovaLang Toolchain Bootstrap
 
 This repository contains an ANTLR4 grammar (`nova.g4`) for the NovaLang surface
-syntax and now includes the first steps toward a C-based reference
-implementation. The initial milestone focuses on getting source text tokenised,
-parsed into an abstract syntax tree (AST), and analysed by an embryonic
-semantic layer.
+syntax and now includes a C-based toolchain prototype. The codebase covers
+lexing, parsing, semantic analysis with type inference and effect tracking, a
+typed intermediate representation, native code generation, and lightweight
+developer tooling.
 
 ## What Exists Today
 
@@ -15,18 +15,29 @@ semantic layer.
   the handwritten lexer stays aligned with the grammar.
 * `include/` & `src/` — C headers and implementations for:
   * Token infrastructure (`nova/token.h`, `src/token.c`).
-  * Lexer (`nova/lexer.h`, `src/lexer.c`) translating the ANTLR tokens into a
+  * Lexer (`nova/lexer.h`, `src/lexer.c`) translating NovaLang source into a
     stream of `NovaToken` structures.
-  * AST data structures (`nova/ast.h`, `src/ast.c`).
-  * Recursive-descent parser (`nova/parser.h`, `src/parser.c`) mirroring the
-    grammar rules and producing a `NovaProgram` tree.
-  * Early semantic analysis (`nova/semantic.h`, `src/semantic.c`) that performs
-    scope tracking, literal typing, and simple diagnostics for duplicate or
-    unknown identifiers.
-* `tests/parser_tests.c` — smoke tests that exercise the lexer, parser, and
-  semantic pass, validating duplicate-definition detection and a well-formed
-  sample program.
-* `Makefile` — builds the test binary with `gcc`.
+  * Expanded AST data structures (`nova/ast.h`, `src/ast.c`) that faithfully
+    capture variants, match arms, pipelines, async/await, blocks, and literal
+    forms described in `nova.g4`.
+  * A fault-tolerant recursive-descent parser (`nova/parser.h`, `src/parser.c`)
+    with diagnostics and recovery that mirrors the grammar and produces a
+    `NovaProgram` tree.
+  * A richer semantic analysis engine (`nova/semantic.h`, `src/semantic.c`)
+    featuring scope management, type inference, effect tracking, variant
+    exhaustiveness checking, and per-expression type/effect metadata.
+  * A typed intermediate representation (`nova/ir.h`, `src/ir.c`) lowered from
+    the AST with help from semantic results.
+  * A native code generator (`nova/codegen.h`, `src/codegen.c`) that emits C
+    and drives the system compiler to produce object files.
+* Developer tooling under `tools/`:
+  * `nova-fmt` — simple formatter that reflows NovaLang source while validating
+    syntax.
+  * `nova-repl` — interactive shell that reports the inferred type of
+    expressions.
+* `tests/parser_tests.c` — end-to-end tests that cover parsing, semantics,
+  exhaustiveness warnings, IR generation, and native code emission.
+* `Makefile` — builds tests and developer tools with `gcc`.
 
 ## Running the Tests
 
@@ -35,22 +46,12 @@ make
 ./build/tests
 ```
 
-The test suite constructs small NovaLang snippets, parses them, and runs the
-semantic analyser to ensure basic invariants hold.
+The test suite parses representative NovaLang snippets, runs semantic analysis
+to validate inference and diagnostics, lowers to the intermediate
+representation, and exercises the native code generator.
 
 ## Next Steps
 
-1. Flesh out the AST to capture the full richness of `nova.g4`, including proper
-   variant/type declarations and match arms.
-2. Improve the parser with richer error recovery and correct handling for all
-   expression forms (especially pipelines, async/await, and blocks) per the
-   grammar.
-3. Expand semantic analysis with real type inference, effect tracking, and
-   exhaustiveness checking for pattern matches.
-4. Introduce a typed intermediate representation and code generation path to
-   native object files.
-5. Layer on developer tooling (formatter, REPL, eventually an LSP server) once
-   the core compiler pipeline is stable.
-
-These steps continue the march toward the full NovaLang toolchain described in
-the original request.
+The next milestones focus on broadening expression lowering in the IR,
+covering more host-side optimisations, expanding the formatter, and layering in
+language-server features.

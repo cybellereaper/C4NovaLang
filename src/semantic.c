@@ -513,6 +513,18 @@ static NovaTypeId analyze_if(NovaSemanticContext *ctx, NovaScope *scope, const N
     return result;
 }
 
+static NovaTypeId analyze_while(NovaSemanticContext *ctx, NovaScope *scope, const NovaExpr *expr, NovaEffectMask *out_effects) {
+    NovaEffectMask effects = NOVA_EFFECT_NONE;
+    NovaTypeId condition_type = analyze_expr(ctx, scope, expr->as.while_expr.condition, &effects);
+    unify_types(ctx, ctx->type_bool, condition_type, expr->start_token);
+    NovaEffectMask body_effects = NOVA_EFFECT_NONE;
+    analyze_expr(ctx, scope, expr->as.while_expr.body, &body_effects);
+    effects |= body_effects;
+    expr_info_list_record(&ctx->expr_info, expr, ctx->type_unit, effects);
+    if (out_effects) *out_effects |= effects;
+    return ctx->type_unit;
+}
+
 static NovaTypeId analyze_lambda(NovaSemanticContext *ctx, NovaScope *scope, const NovaExpr *expr, NovaEffectMask *out_effects) {
     NovaScope *lambda_scope = scope_push(scope);
     NovaTypeId *param_types = NULL;
@@ -562,6 +574,8 @@ static NovaTypeId analyze_expr(NovaSemanticContext *ctx, NovaScope *scope, const
         return analyze_pipeline(ctx, scope, expr, out_effects);
     case NOVA_EXPR_IF:
         return analyze_if(ctx, scope, expr, out_effects);
+    case NOVA_EXPR_WHILE:
+        return analyze_while(ctx, scope, expr, out_effects);
     case NOVA_EXPR_MATCH:
         return analyze_match(ctx, scope, expr, out_effects);
     case NOVA_EXPR_ASYNC: {
@@ -714,4 +728,3 @@ const NovaTypeInfo *nova_semantic_type_info(const NovaSemanticContext *ctx, Nova
 const NovaTypeRecord *nova_semantic_find_type(const NovaSemanticContext *ctx, const NovaToken *name) {
     return type_record_find(ctx, name);
 }
-

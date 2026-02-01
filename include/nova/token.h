@@ -12,6 +12,7 @@ typedef enum {
     NOVA_TOKEN_LET,
     NOVA_TOKEN_TYPE,
     NOVA_TOKEN_IF,
+    NOVA_TOKEN_WHILE,
     NOVA_TOKEN_ELSE,
     NOVA_TOKEN_MATCH,
     NOVA_TOKEN_ASYNC,
@@ -61,4 +62,3 @@ void nova_token_array_push(NovaTokenArray *array, NovaToken token);
 void nova_token_array_free(NovaTokenArray *array);
 
 const char *nova_token_type_name(NovaTokenType type);
-

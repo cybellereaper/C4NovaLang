@@ -9,6 +9,7 @@ FUN     : 'fun';
 LET     : 'let';
 TYPE    : 'type';
 IF      : 'if';
+WHILE   : 'while';
 ELSE    : 'else';
 MATCH   : 'match';
 ASYNC   : 'async';
@@ -82,6 +83,7 @@ typeRef
 // --------------------------------------------------------------------
 expr
     : IF expr block (ELSE block)?                 #ifExpr
+    | WHILE expr block                            #whileExpr
     | MATCH expr '{' matchArm+ '}'                #matchExpr
     | ASYNC block                                 #asyncExpr
     | AWAIT expr                                  #awaitExpr

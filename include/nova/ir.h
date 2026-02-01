@@ -12,8 +12,10 @@ typedef enum {
     NOVA_IR_EXPR_UNIT,
     NOVA_IR_EXPR_IDENTIFIER,
     NOVA_IR_EXPR_CALL,
+    NOVA_IR_EXPR_SEQUENCE,
     NOVA_IR_EXPR_LIST,
     NOVA_IR_EXPR_IF,
+    NOVA_IR_EXPR_WHILE,
     NOVA_IR_EXPR_MATCH,
 } NovaIRExprKind;
 
@@ -44,6 +46,10 @@ struct NovaIRExpr {
             struct NovaIRExpr **elements;
             size_t count;
         } list;
+        struct {
+            struct NovaIRExpr **items;
+            size_t count;
+        } sequence;
         NovaToken identifier;
         struct {
             NovaToken callee;
@@ -55,6 +61,10 @@ struct NovaIRExpr {
             NovaIRExpr *then_branch;
             NovaIRExpr *else_branch;
         } if_expr;
+        struct {
+            NovaIRExpr *condition;
+            NovaIRExpr *body;
+        } while_expr;
         struct {
             NovaIRExpr *scrutinee;
             NovaIRMatchArm *arms;
@@ -80,4 +90,3 @@ typedef struct {
 
 NovaIRProgram *nova_ir_lower(const NovaProgram *program, const NovaSemanticContext *semantics);
 void nova_ir_free(NovaIRProgram *program);
-

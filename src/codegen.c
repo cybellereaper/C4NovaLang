@@ -26,6 +26,12 @@ static void emit_token(FILE *out, NovaToken token) {
     fwrite(token.lexeme, 1, token.length, out);
 }
 
+static void emit_indent(FILE *out, int indent) {
+    for (int i = 0; i < indent; ++i) {
+        fputs("    ", out);
+    }
+}
+
 static const char *type_to_c(const NovaSemanticContext *semantics, NovaTypeId type) {
     const NovaTypeInfo *info = nova_semantic_type_info(semantics, type);
     if (!info) return "double";
@@ -45,6 +51,31 @@ static const char *type_to_c(const NovaSemanticContext *semantics, NovaTypeId ty
     default:
         return "double";
     }
+}
+
+static bool emit_expr(FILE *out, const NovaSemanticContext *semantics, const NovaIRExpr *expr);
+
+static bool emit_statement(FILE *out, const NovaSemanticContext *semantics, const NovaIRExpr *expr, int indent) {
+    if (!expr) {
+        emit_indent(out, indent);
+        fputs(";", out);
+        return true;
+    }
+    if (expr->kind == NOVA_IR_EXPR_WHILE) {
+        emit_indent(out, indent);
+        fputs("while (", out);
+        if (!emit_expr(out, semantics, expr->as.while_expr.condition)) return false;
+        fputs(") {\n", out);
+        if (!emit_statement(out, semantics, expr->as.while_expr.body, indent + 1)) return false;
+        fputc('\n', out);
+        emit_indent(out, indent);
+        fputs("}", out);
+        return true;
+    }
+    emit_indent(out, indent);
+    if (!emit_expr(out, semantics, expr)) return false;
+    fputs(";", out);
+    return true;
 }
 
 static bool emit_expr(FILE *out, const NovaSemanticContext *semantics, const NovaIRExpr *expr) {
@@ -81,6 +112,14 @@ static bool emit_expr(FILE *out, const NovaSemanticContext *semantics, const Nov
         }
         fputc(')', out);
         return true;
+    case NOVA_IR_EXPR_SEQUENCE:
+        fputc('(', out);
+        for (size_t i = 0; i < expr->as.sequence.count; ++i) {
+            if (i > 0) fputs(", ", out);
+            if (!emit_expr(out, semantics, expr->as.sequence.items[i])) return false;
+        }
+        fputc(')', out);
+        return true;
     case NOVA_IR_EXPR_IF: {
         NovaIRExpr *cond = expr->as.if_expr.condition;
         if (cond && cond->kind == NOVA_IR_EXPR_BOOL) {
@@ -106,6 +145,7 @@ static bool emit_expr(FILE *out, const NovaSemanticContext *semantics, const Nov
         fputc(')', out);
         return true;
     }
+    case NOVA_IR_EXPR_WHILE:
     case NOVA_IR_EXPR_LIST:
     case NOVA_IR_EXPR_MATCH:
         return false;
@@ -129,8 +169,9 @@ static bool emit_function(FILE *out, const NovaSemanticContext *semantics, const
             emit_token(out, fn->params[i].name);
         }
     }
-    fputs(") {\n    ", out);
+    fputs(") {\n", out);
     if (strcmp(return_type, "void") != 0) {
+        emit_indent(out, 1);
         fputs("return ", out);
         if (!emit_expr(out, semantics, fn->body)) return false;
         fputs(";\n", out);

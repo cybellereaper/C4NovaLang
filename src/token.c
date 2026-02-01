@@ -36,6 +36,7 @@ const char *nova_token_type_name(NovaTokenType type) {
     case NOVA_TOKEN_LET: return "LET";
     case NOVA_TOKEN_TYPE: return "TYPE";
     case NOVA_TOKEN_IF: return "IF";
+    case NOVA_TOKEN_WHILE: return "WHILE";
     case NOVA_TOKEN_ELSE: return "ELSE";
     case NOVA_TOKEN_MATCH: return "MATCH";
     case NOVA_TOKEN_ASYNC: return "ASYNC";
@@ -67,4 +68,3 @@ const char *nova_token_type_name(NovaTokenType type) {
     default: return "UNKNOWN";
     }
 }
-

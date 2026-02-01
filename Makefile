@@ -7,7 +7,7 @@ RELEASE_TARGET?=linux-x86_64
 
 all: build/tests $(TOOLS)
 
-build/tests: $(SRC) tests/parser_tests.c | build
+build/tests: $(SRC) tests/parser_tests.c | build build/nova-check
 	$(CC) $(CFLAGS) $^ -o $@
 
 build/nova-fmt: $(SRC) tools/nova_fmt.c | build

@@ -33,6 +33,8 @@ developer tooling.
 * Developer tooling under `tools/`:
   * `nova-fmt` — simple formatter that reflows NovaLang source while validating
     syntax.
+  * `nova-check` — end-to-end stability checker that parses, runs semantic
+    analysis, lowers to IR, and optionally runs native code generation.
   * `nova-repl` — interactive shell that reports the inferred type of
     expressions.
   * `nova-new` — scaffolds a new NovaLang project with a manifest and sample
@@ -48,6 +50,12 @@ developer tooling.
 ```
 make
 ./build/tests
+```
+
+You can also validate a single source file with the stability checker:
+
+```
+./build/nova-check path/to/file.nova
 ```
 
 The test suite parses representative NovaLang snippets, runs semantic analysis

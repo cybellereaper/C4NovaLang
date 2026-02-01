@@ -158,6 +158,23 @@ static NovaIRExpr *lower_if(const NovaExpr *expr, const NovaSemanticContext *sem
     return ir;
 }
 
+static NovaIRExpr *lower_while(const NovaExpr *expr, const NovaSemanticContext *semantics) {
+    const NovaExprInfo *info = nova_semantic_lookup_expr(semantics, expr);
+    NovaIRExpr *ir = nova_ir_expr_new(NOVA_IR_EXPR_WHILE, info ? info->type : 0);
+    if (!ir) return NULL;
+    ir->as.while_expr.condition = lower_expr(expr->as.while_expr.condition, semantics);
+    if (!ir->as.while_expr.condition) {
+        nova_ir_expr_free(ir);
+        return NULL;
+    }
+    ir->as.while_expr.body = lower_expr(expr->as.while_expr.body, semantics);
+    if (!ir->as.while_expr.body) {
+        nova_ir_expr_free(ir);
+        return NULL;
+    }
+    return ir;
+}
+
 static NovaIRExpr *lower_pipeline(const NovaExpr *expr, const NovaSemanticContext *semantics) {
     NovaIRExpr *current = lower_expr(expr->as.pipe.target, semantics);
     if (!current) {
@@ -264,11 +281,33 @@ static NovaIRExpr *lower_expr(const NovaExpr *expr, const NovaSemanticContext *s
         return lower_pipeline(expr, semantics);
     case NOVA_EXPR_IF:
         return lower_if(expr, semantics);
+    case NOVA_EXPR_WHILE:
+        return lower_while(expr, semantics);
     case NOVA_EXPR_BLOCK:
         if (expr->as.block.expressions.count == 0) {
             return nova_ir_expr_new(NOVA_IR_EXPR_UNIT, semantics->type_unit);
         }
-        return lower_expr(expr->as.block.expressions.items[expr->as.block.expressions.count - 1], semantics);
+        if (expr->as.block.expressions.count == 1) {
+            return lower_expr(expr->as.block.expressions.items[0], semantics);
+        }
+        const NovaExprInfo *info = nova_semantic_lookup_expr(semantics, expr);
+        NovaIRExpr *sequence = nova_ir_expr_new(NOVA_IR_EXPR_SEQUENCE, info ? info->type : 0);
+        if (!sequence) return NULL;
+        size_t count = expr->as.block.expressions.count;
+        sequence->as.sequence.count = count;
+        sequence->as.sequence.items = calloc(count, sizeof(NovaIRExpr *));
+        if (!sequence->as.sequence.items) {
+            nova_ir_expr_free(sequence);
+            return NULL;
+        }
+        for (size_t i = 0; i < count; ++i) {
+            sequence->as.sequence.items[i] = lower_expr(expr->as.block.expressions.items[i], semantics);
+            if (!sequence->as.sequence.items[i]) {
+                nova_ir_expr_free(sequence);
+                return NULL;
+            }
+        }
+        return sequence;
     case NOVA_EXPR_PAREN:
         return lower_expr(expr->as.inner, semantics);
     case NOVA_EXPR_MATCH:
@@ -303,6 +342,23 @@ static void optimize_ir_expr(NovaIRExpr **expr_ptr) {
             optimize_ir_expr(&expr->as.call.args[i]);
         }
         break;
+    case NOVA_IR_EXPR_SEQUENCE:
+        for (size_t i = 0; i < expr->as.sequence.count; ++i) {
+            optimize_ir_expr(&expr->as.sequence.items[i]);
+        }
+        if (expr->as.sequence.count == 0) {
+            NovaIRExpr temp = { .kind = NOVA_IR_EXPR_UNIT, .type = expr->type };
+            *expr = temp;
+        } else if (expr->as.sequence.count == 1) {
+            NovaIRExpr *only = expr->as.sequence.items[0];
+            free(expr->as.sequence.items);
+            NovaIRExpr temp = *only;
+            free(only);
+            *expr = temp;
+            optimize_ir_expr(expr_ptr);
+            return;
+        }
+        break;
     case NOVA_IR_EXPR_LIST:
         for (size_t i = 0; i < expr->as.list.count; ++i) {
             optimize_ir_expr(&expr->as.list.elements[i]);
@@ -327,6 +383,19 @@ static void optimize_ir_expr(NovaIRExpr **expr_ptr) {
             *expr = temp;
             optimize_ir_expr(expr_ptr);
             return;
+        }
+        break;
+    }
+    case NOVA_IR_EXPR_WHILE: {
+        optimize_ir_expr(&expr->as.while_expr.condition);
+        optimize_ir_expr(&expr->as.while_expr.body);
+        bool condition_value = false;
+        if (ir_expr_is_bool_constant(expr->as.while_expr.condition, &condition_value) && !condition_value) {
+            nova_ir_expr_free(expr->as.while_expr.condition);
+            nova_ir_expr_free(expr->as.while_expr.body);
+            expr->as.while_expr.condition = NULL;
+            expr->as.while_expr.body = NULL;
+            expr->kind = NOVA_IR_EXPR_UNIT;
         }
         break;
     }
@@ -383,6 +452,14 @@ static void nova_ir_expr_free(NovaIRExpr *expr) {
             free(expr->as.list.elements);
         }
         break;
+    case NOVA_IR_EXPR_SEQUENCE:
+        if (expr->as.sequence.items) {
+            for (size_t i = 0; i < expr->as.sequence.count; ++i) {
+                nova_ir_expr_free(expr->as.sequence.items[i]);
+            }
+            free(expr->as.sequence.items);
+        }
+        break;
     case NOVA_IR_EXPR_CALL:
         if (expr->as.call.args) {
             for (size_t i = 0; i < expr->as.call.arg_count; ++i) {
@@ -395,6 +472,10 @@ static void nova_ir_expr_free(NovaIRExpr *expr) {
         nova_ir_expr_free(expr->as.if_expr.condition);
         nova_ir_expr_free(expr->as.if_expr.then_branch);
         nova_ir_expr_free(expr->as.if_expr.else_branch);
+        break;
+    case NOVA_IR_EXPR_WHILE:
+        nova_ir_expr_free(expr->as.while_expr.condition);
+        nova_ir_expr_free(expr->as.while_expr.body);
         break;
     case NOVA_IR_EXPR_MATCH:
         nova_ir_expr_free(expr->as.match_expr.scrutinee);

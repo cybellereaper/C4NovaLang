@@ -80,6 +80,17 @@ static char *read_file_contents(const char *path) {
     return buffer;
 }
 
+static bool write_file_contents(const char *path, const char *contents) {
+    FILE *file = fopen(path, "wb");
+    if (!file) {
+        return false;
+    }
+    size_t len = strlen(contents);
+    bool ok = fwrite(contents, 1, len, file) == len;
+    fclose(file);
+    return ok;
+}
+
 static int nova_mkdir(const char *path, int mode) {
 #ifdef _WIN32
     (void)mode;
@@ -371,14 +382,81 @@ static void test_project_generator(void) {
     system(cleanup_cmd);
 }
 
+static void test_while_loop_codegen(void) {
+    const char *source =
+        "module demo.loop\n"
+        "fun spin(flag: Bool): Unit = while flag { 1 }\n";
+
+    NovaParser parser;
+    nova_parser_init(&parser, source);
+    NovaProgram *program = nova_parser_parse(&parser);
+    assert(program != NULL);
+
+    NovaSemanticContext ctx;
+    nova_semantic_context_init(&ctx);
+    nova_semantic_analyze_program(&ctx, program);
+    assert(ctx.diagnostics.count == 0);
+
+    const NovaFunDecl *spin = &program->decls[0].as.fun_decl;
+    const NovaExprInfo *spin_info = nova_semantic_lookup_expr(&ctx, spin->body);
+    assert(spin_info != NULL);
+    assert(spin_info->type == ctx.type_unit);
+
+    NovaIRProgram *ir = nova_ir_lower(program, &ctx);
+    assert(ir != NULL);
+
+    const NovaIRFunction *spin_fn = find_function(ir, "spin");
+    assert(spin_fn != NULL);
+    assert(spin_fn->body != NULL);
+    assert(spin_fn->body->kind == NOVA_IR_EXPR_WHILE);
+
+    const char *object_path = "build/spin.o";
+    char error[256];
+    bool ok = nova_codegen_emit_object(ir, &ctx, object_path, error, sizeof(error));
+    assert(ok && "code generation failed for while loop");
+
+    struct stat st;
+    assert(stat(object_path, &st) == 0);
+
+    remove(object_path);
+    nova_ir_free(ir);
+    nova_semantic_context_free(&ctx);
+    nova_program_free(program);
+    free(program);
+    nova_parser_free(&parser);
+}
+
+static void test_stability_checker_cli(void) {
+    char template[] = "build/nova_checkXXXXXX";
+    char *check_dir = make_temp_dir(template);
+    assert(check_dir != NULL);
+
+    char source_path[PATH_MAX];
+    snprintf(source_path, sizeof(source_path), "%s/check.nova", check_dir);
+    const char *source =
+        "module demo.check\n"
+        "fun counter(flag: Bool): Unit = while flag { 1 }\n";
+    assert(write_file_contents(source_path, source));
+
+    char command[PATH_MAX * 2];
+    snprintf(command, sizeof(command), "./build/nova-check %s", source_path);
+    int rc = system(command);
+    assert(rc == 0);
+
+    char cleanup_cmd[PATH_MAX * 2];
+    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf %s", check_dir);
+    system(cleanup_cmd);
+}
+
 int main(void) {
     test_parser_and_semantics();
     test_match_exhaustiveness_warning();
     test_codegen_pipeline();
     test_ir_lowering_extensions();
     test_ir_control_flow_optimizations();
+    test_while_loop_codegen();
     test_project_generator();
+    test_stability_checker_cli();
     printf("All tests passed.\n");
     return 0;
 }
-

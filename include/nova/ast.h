@@ -66,6 +66,11 @@ typedef struct {
 } NovaIfExpr;
 
 typedef struct {
+    NovaExpr *condition;
+    NovaExpr *body;
+} NovaWhileExpr;
+
+typedef struct {
     NovaExpr *value;
 } NovaUnaryExpr;
 
@@ -108,6 +113,7 @@ typedef struct {
 
 typedef enum {
     NOVA_EXPR_IF,
+    NOVA_EXPR_WHILE,
     NOVA_EXPR_MATCH,
     NOVA_EXPR_ASYNC,
     NOVA_EXPR_AWAIT,
@@ -127,6 +133,7 @@ struct NovaExpr {
     NovaToken start_token;
     union {
         NovaIfExpr if_expr;
+        NovaWhileExpr while_expr;
         NovaMatchExpr match_expr;
         NovaUnaryExpr unary;
         NovaPipeExpr pipe;
@@ -247,4 +254,3 @@ void nova_program_init(NovaProgram *program);
 void nova_program_add_import(NovaProgram *program, NovaImportDecl import);
 void nova_program_add_decl(NovaProgram *program, NovaDecl decl);
 void nova_program_free(NovaProgram *program);
-

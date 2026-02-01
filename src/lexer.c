@@ -13,6 +13,7 @@ static bool nova_match_keyword(const char *lexeme, size_t length, NovaTokenType 
         {"let", NOVA_TOKEN_LET},
         {"type", NOVA_TOKEN_TYPE},
         {"if", NOVA_TOKEN_IF},
+        {"while", NOVA_TOKEN_WHILE},
         {"else", NOVA_TOKEN_ELSE},
         {"match", NOVA_TOKEN_MATCH},
         {"async", NOVA_TOKEN_ASYNC},
@@ -236,4 +237,3 @@ NovaTokenArray nova_lexer_tokenize(const char *source) {
     }
     return array;
 }
-

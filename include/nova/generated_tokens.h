@@ -1,7 +1,7 @@
 // Auto-generated from nova.g4. Do not edit manually.
 #pragma once
 
-#define NOVA_TOKEN_KEYWORD_COUNT 15
+#define NOVA_TOKEN_KEYWORD_COUNT 16
 static const char *const nova_token_names[] = {
     "MODULE",
     "IMPORT",
@@ -9,6 +9,7 @@ static const char *const nova_token_names[] = {
     "LET",
     "TYPE",
     "IF",
+    "WHILE",
     "ELSE",
     "MATCH",
     "ASYNC",
@@ -32,6 +33,7 @@ static const char *const nova_keyword_lexemes[] = {
     "let",
     "type",
     "if",
+    "while",
     "else",
     "match",
     "async",

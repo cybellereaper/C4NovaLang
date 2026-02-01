@@ -183,6 +183,10 @@ static void nova_expr_free(NovaExpr *expr) {
         nova_expr_free(expr->as.if_expr.then_branch);
         nova_expr_free(expr->as.if_expr.else_branch);
         break;
+    case NOVA_EXPR_WHILE:
+        nova_expr_free(expr->as.while_expr.condition);
+        nova_expr_free(expr->as.while_expr.body);
+        break;
     case NOVA_EXPR_MATCH:
         nova_expr_free(expr->as.match_expr.scrutinee);
         for (size_t i = 0; i < expr->as.match_expr.arms.count; ++i) {
@@ -309,4 +313,3 @@ void nova_program_free(NovaProgram *program) {
     program->decl_count = 0;
     program->decl_capacity = 0;
 }
-

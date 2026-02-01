@@ -61,6 +61,15 @@ static bool emit_statement(FILE *out, const NovaSemanticContext *semantics, cons
         fputs(";", out);
         return true;
     }
+    if (expr->kind == NOVA_IR_EXPR_SEQUENCE) {
+        for (size_t i = 0; i < expr->as.sequence.count; ++i) {
+            if (!emit_statement(out, semantics, expr->as.sequence.items[i], indent)) return false;
+            if (i + 1 < expr->as.sequence.count) {
+                fputc('\n', out);
+            }
+        }
+        return true;
+    }
     if (expr->kind == NOVA_IR_EXPR_WHILE) {
         emit_indent(out, indent);
         fputs("while (", out);
@@ -113,6 +122,13 @@ static bool emit_expr(FILE *out, const NovaSemanticContext *semantics, const Nov
         fputc(')', out);
         return true;
     case NOVA_IR_EXPR_SEQUENCE:
+        if (expr->as.sequence.count == 0) {
+            fputs("0", out);
+            return true;
+        }
+        if (expr->as.sequence.count == 1) {
+            return emit_expr(out, semantics, expr->as.sequence.items[0]);
+        }
         fputc('(', out);
         for (size_t i = 0; i < expr->as.sequence.count; ++i) {
             if (i > 0) fputs(", ", out);

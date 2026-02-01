@@ -448,6 +448,24 @@ static void test_stability_checker_cli(void) {
     system(cleanup_cmd);
 }
 
+static void test_examples(void) {
+    struct ExampleCheck {
+        const char *path;
+        const char *flags;
+    };
+    const struct ExampleCheck examples[] = {
+        { "examples/pipeline.nova", "" },
+        { "examples/options.nova", "--skip-codegen " },
+        { "examples/loop.nova", "" },
+    };
+    for (size_t i = 0; i < sizeof(examples) / sizeof(examples[0]); ++i) {
+        char command[PATH_MAX * 2];
+        snprintf(command, sizeof(command), "./build/nova-check %s%s", examples[i].flags, examples[i].path);
+        int rc = system(command);
+        assert(rc == 0);
+    }
+}
+
 int main(void) {
     test_parser_and_semantics();
     test_match_exhaustiveness_warning();
@@ -457,6 +475,7 @@ int main(void) {
     test_while_loop_codegen();
     test_project_generator();
     test_stability_checker_cli();
+    test_examples();
     printf("All tests passed.\n");
     return 0;
 }

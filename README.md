@@ -41,6 +41,8 @@ developer tooling.
     entry point that compiles end-to-end.
 * `docs/language.md` — methodised language reference covering syntax and core
   semantics.
+* `examples/` — small NovaLang programs that exercise pipelines, matches, and
+  loops.
 * `tests/parser_tests.c` — end-to-end tests that cover parsing, semantics,
   exhaustiveness warnings, IR generation, and native code emission.
 * `Makefile` — builds tests and developer tools with `gcc`.
@@ -56,6 +58,12 @@ You can also validate a single source file with the stability checker:
 
 ```
 ./build/nova-check path/to/file.nova
+```
+
+Try one of the shipped examples:
+
+```
+./build/nova-check examples/pipeline.nova
 ```
 
 The test suite parses representative NovaLang snippets, runs semantic analysis

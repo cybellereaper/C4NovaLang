@@ -177,3 +177,11 @@ programs and embedded-style workflows.
 - Keep blocks short and use pipelines to express linear transformations.
 - Prefer `match` over nested `if` when destructuring variants.
 - Use explicit type annotations at module boundaries for clarity.
+
+## 8) Examples
+
+Sample programs are available in the `examples/` directory:
+
+- `examples/pipeline.nova` — pipelines and function declarations.
+- `examples/options.nova` — sum types and `match`.
+- `examples/loop.nova` — a minimal `while` loop.

@@ -1,0 +1,3 @@
+module demo.recursive
+
+fun loop(n: Number): Number = if true { 0 } else { loop(n) }

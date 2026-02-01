@@ -119,6 +119,10 @@ static NovaIRExpr *lower_call(const NovaExpr *expr, const NovaSemanticContext *s
         }
         for (size_t i = 0; i < expr->as.call.args.count; ++i) {
             ir->as.call.args[i] = lower_expr(expr->as.call.args.items[i].value, semantics);
+            if (!ir->as.call.args[i]) {
+                nova_ir_expr_free(ir);
+                return NULL;
+            }
         }
     }
     return ir;
@@ -462,4 +466,3 @@ void nova_ir_free(NovaIRProgram *program) {
     free(program->functions);
     free(program);
 }
-

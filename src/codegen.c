@@ -134,6 +134,9 @@ static bool emit_function(FILE *out, const NovaSemanticContext *semantics, const
         fputs("return ", out);
         if (!emit_expr(out, semantics, fn->body)) return false;
         fputs(";\n", out);
+    } else if (fn->body) {
+        if (!emit_expr(out, semantics, fn->body)) return false;
+        fputs(";\n", out);
     }
     fputs("}\n\n", out);
     return true;
@@ -177,4 +180,3 @@ bool nova_codegen_emit_object(const NovaIRProgram *program, const NovaSemanticCo
     remove(c_path);
     return true;
 }
-

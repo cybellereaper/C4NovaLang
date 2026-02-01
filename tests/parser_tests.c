@@ -310,6 +310,32 @@ static void test_ir_control_flow_optimizations(void) {
     nova_parser_free(&parser);
 }
 
+static void test_recursive_function_support(void) {
+    char *source = read_file_contents("tests/fixtures/recursive.nova");
+    assert(source != NULL);
+
+    NovaParser parser;
+    nova_parser_init(&parser, source);
+    NovaProgram *program = nova_parser_parse(&parser);
+    assert(program != NULL);
+
+    NovaSemanticContext ctx;
+    nova_semantic_context_init(&ctx);
+    nova_semantic_analyze_program(&ctx, program);
+    assert(ctx.diagnostics.count == 0);
+
+    nova_semantic_context_free(&ctx);
+    nova_program_free(program);
+    free(program);
+    nova_parser_free(&parser);
+    free(source);
+}
+
+static void test_nova_check_tool(void) {
+    int rc = system("./build/nova-check tests/fixtures/recursive.nova");
+    assert(rc == 0);
+}
+
 static void test_project_generator(void) {
     char template[] = "build/nova_projXXXXXX";
     char *project_dir = make_temp_dir(template);
@@ -377,8 +403,9 @@ int main(void) {
     test_codegen_pipeline();
     test_ir_lowering_extensions();
     test_ir_control_flow_optimizations();
+    test_recursive_function_support();
+    test_nova_check_tool();
     test_project_generator();
     printf("All tests passed.\n");
     return 0;
 }
-

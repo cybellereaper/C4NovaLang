@@ -37,6 +37,8 @@ developer tooling.
     expressions.
   * `nova-new` — scaffolds a new NovaLang project with a manifest and sample
     entry point that compiles end-to-end.
+  * `nova-check` — pipeline validator that parses, performs semantic analysis,
+    lowers to IR, and runs code generation to evaluate stability.
 * `tests/parser_tests.c` — end-to-end tests that cover parsing, semantics,
   exhaustiveness warnings, IR generation, and native code emission.
 * `Makefile` — builds tests and developer tools with `gcc`.
@@ -82,6 +84,11 @@ Push a tag that matches the version (for example, `git tag v0.1.0 && git push
 origin v0.1.0`) to trigger the included GitHub Actions workflow, which will
 build both Linux and Windows archives and upload them to a GitHub Release
 automatically.
+
+## Language Reference
+
+* `docs/language_reference.md` — methodized syntax and semantics guide that
+  documents the minimal, stack-friendly core language.
 
 ## Next Steps
 

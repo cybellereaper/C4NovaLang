@@ -1,0 +1,5 @@
+module demo.options
+
+type Option = Some(Number) | None
+
+fun choose(v: Option): Number = match v { Some(value) -> value; None -> 0 }

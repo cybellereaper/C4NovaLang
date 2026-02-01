@@ -1,0 +1,3 @@
+module demo.loop
+
+fun spin(flag: Bool): Unit = while flag { 0 }

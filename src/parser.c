@@ -61,6 +61,7 @@ static void synchronize(NovaParser *parser) {
         case NOVA_TOKEN_LET:
         case NOVA_TOKEN_TYPE:
         case NOVA_TOKEN_IF:
+        case NOVA_TOKEN_WHILE:
         case NOVA_TOKEN_MATCH:
         case NOVA_TOKEN_ASYNC:
             return;
@@ -375,6 +376,15 @@ static NovaExpr *parse_expression(NovaParser *parser) {
         expr->as.if_expr.else_branch = else_branch;
         return expr;
     }
+    if (match(parser, NOVA_TOKEN_WHILE)) {
+        NovaToken start = previous(parser);
+        NovaExpr *condition = parse_expression(parser);
+        NovaExpr *body = parse_block_expression(parser);
+        NovaExpr *expr = nova_expr_new(NOVA_EXPR_WHILE, start);
+        expr->as.while_expr.condition = condition;
+        expr->as.while_expr.body = body;
+        return expr;
+    }
     if (match(parser, NOVA_TOKEN_MATCH)) {
         return parse_match_expr(parser, previous(parser));
     }
@@ -578,4 +588,3 @@ void nova_parser_free(NovaParser *parser) {
     parser->tokens.size = 0;
     parser->tokens.capacity = 0;
 }
-

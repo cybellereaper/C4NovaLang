@@ -1,0 +1,6 @@
+module demo.pipeline
+
+fun identity(x: Number): Number = x
+fun twice(x: Number): Number = x
+
+fun compute(): Number = 1 |> identity |> twice

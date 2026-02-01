@@ -33,10 +33,16 @@ developer tooling.
 * Developer tooling under `tools/`:
   * `nova-fmt` — simple formatter that reflows NovaLang source while validating
     syntax.
+  * `nova-check` — end-to-end stability checker that parses, runs semantic
+    analysis, lowers to IR, and optionally runs native code generation.
   * `nova-repl` — interactive shell that reports the inferred type of
     expressions.
   * `nova-new` — scaffolds a new NovaLang project with a manifest and sample
     entry point that compiles end-to-end.
+* `docs/language.md` — methodised language reference covering syntax and core
+  semantics.
+* `examples/` — small NovaLang programs that exercise pipelines, matches, and
+  loops.
 * `tests/parser_tests.c` — end-to-end tests that cover parsing, semantics,
   exhaustiveness warnings, IR generation, and native code emission.
 * `Makefile` — builds tests and developer tools with `gcc`.
@@ -46,6 +52,18 @@ developer tooling.
 ```
 make
 ./build/tests
+```
+
+You can also validate a single source file with the stability checker:
+
+```
+./build/nova-check path/to/file.nova
+```
+
+Try one of the shipped examples:
+
+```
+./build/nova-check examples/pipeline.nova
 ```
 
 The test suite parses representative NovaLang snippets, runs semantic analysis
@@ -82,6 +100,9 @@ Push a tag that matches the version (for example, `git tag v0.1.0 && git push
 origin v0.1.0`) to trigger the included GitHub Actions workflow, which will
 build both Linux and Windows archives and upload them to a GitHub Release
 automatically.
+
+For continuous verification, the repository now includes a CI workflow that
+builds the toolchain and runs the test suite on every push.
 
 ## Next Steps
 

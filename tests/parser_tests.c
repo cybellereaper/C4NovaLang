@@ -248,15 +248,55 @@ static void test_gc_incremental_steps(void) {
     NovaGCStats stepped = nova_gc_stats(gc);
     assert(stepped.collections >= collections_before + 1);
     assert(stepped.collection_in_progress);
+    assert(stepped.mark_capacity >= 64);
 
     while (nova_gc_stats(gc).collection_in_progress) {
         nova_gc_collect_step(gc, 8);
     }
 
+    NovaGCStats completed = nova_gc_stats(gc);
+    assert(completed.mark_capacity <= stepped.mark_capacity);
+
     root = NULL;
     nova_gc_collect(gc);
     assert(nova_gc_stats(gc).objects_total == 0);
 
+    nova_gc_destroy(gc);
+}
+
+static void test_gc_root_capacity_shrinks_after_removals(void) {
+    NovaGC *gc = nova_gc_create(NULL);
+    assert(gc != NULL);
+
+    MockNode *roots[64] = {0};
+    void *root_slots[64] = {0};
+    for (size_t i = 0; i < 64; ++i) {
+        roots[i] = nova_gc_alloc(gc, sizeof(MockNode), mock_node_trace, NULL);
+        assert(roots[i] != NULL);
+        roots[i]->child = NULL;
+        root_slots[i] = roots[i];
+        assert(nova_gc_add_root(gc, &root_slots[i]));
+    }
+
+    NovaGCStats before = nova_gc_stats(gc);
+    assert(before.root_capacity >= 64);
+
+    for (size_t i = 0; i < 60; ++i) {
+        nova_gc_remove_root(gc, &root_slots[i]);
+        root_slots[i] = NULL;
+    }
+
+    NovaGCStats after = nova_gc_stats(gc);
+    assert(after.root_count == 4);
+    assert(after.root_capacity < before.root_capacity);
+
+    for (size_t i = 60; i < 64; ++i) {
+        nova_gc_remove_root(gc, &root_slots[i]);
+        root_slots[i] = NULL;
+    }
+
+    nova_gc_collect(gc);
+    assert(nova_gc_stats(gc).objects_total == 0);
     nova_gc_destroy(gc);
 }
 
@@ -682,6 +722,7 @@ static void test_examples(void) {
 int main(void) {
     test_gc_preserves_reachable_objects();
     test_gc_incremental_steps();
+    test_gc_root_capacity_shrinks_after_removals();
     test_gc_mock_allocator_and_failure();
     test_parser_and_semantics();
     test_match_exhaustiveness_warning();

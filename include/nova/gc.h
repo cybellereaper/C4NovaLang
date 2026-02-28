@@ -28,6 +28,8 @@ typedef struct {
     size_t objects_marked;
     size_t objects_swept;
     size_t root_count;
+    size_t root_capacity;
+    size_t mark_capacity;
     bool collection_in_progress;
 } NovaGCStats;
 
@@ -47,4 +49,3 @@ void nova_gc_collect(NovaGC *gc);
 void nova_gc_collect_step(NovaGC *gc, size_t budget_objects);
 
 NovaGCStats nova_gc_stats(const NovaGC *gc);
-

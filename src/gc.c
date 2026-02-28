@@ -73,6 +73,28 @@ static bool ensure_root_capacity(NovaGC *gc, size_t needed) {
     return true;
 }
 
+static bool shrink_root_capacity_if_sparse(NovaGC *gc) {
+    if (gc->root_capacity <= 16 || gc->root_count > (gc->root_capacity / 4)) {
+        return true;
+    }
+
+    size_t next_capacity = gc->root_capacity / 2;
+    if (next_capacity < 16) {
+        next_capacity = 16;
+    }
+    void ***next = gc->alloc(gc->alloc_ctx, next_capacity * sizeof(void **));
+    if (!next) {
+        return false;
+    }
+    if (gc->root_count > 0) {
+        memcpy(next, gc->roots, gc->root_count * sizeof(void **));
+    }
+    gc->free(gc->alloc_ctx, gc->roots);
+    gc->roots = next;
+    gc->root_capacity = next_capacity;
+    return true;
+}
+
 static bool ensure_mark_capacity(NovaGC *gc, size_t needed) {
     if (needed <= gc->mark_capacity) {
         return true;
@@ -89,6 +111,28 @@ static bool ensure_mark_capacity(NovaGC *gc, size_t needed) {
         memcpy(next, gc->mark_stack, gc->mark_count * sizeof(NovaGCObject *));
         gc->free(gc->alloc_ctx, gc->mark_stack);
     }
+    gc->mark_stack = next;
+    gc->mark_capacity = next_capacity;
+    return true;
+}
+
+static bool shrink_mark_capacity_if_sparse(NovaGC *gc) {
+    if (gc->mark_capacity <= 64 || gc->mark_count > (gc->mark_capacity / 4)) {
+        return true;
+    }
+
+    size_t next_capacity = gc->mark_capacity / 2;
+    if (next_capacity < 64) {
+        next_capacity = 64;
+    }
+    NovaGCObject **next = gc->alloc(gc->alloc_ctx, next_capacity * sizeof(NovaGCObject *));
+    if (!next) {
+        return false;
+    }
+    if (gc->mark_count > 0) {
+        memcpy(next, gc->mark_stack, gc->mark_count * sizeof(NovaGCObject *));
+    }
+    gc->free(gc->alloc_ctx, gc->mark_stack);
     gc->mark_stack = next;
     gc->mark_capacity = next_capacity;
     return true;
@@ -263,6 +307,7 @@ void nova_gc_remove_root(NovaGC *gc, void **slot) {
         if (gc->roots[i] == slot) {
             gc->roots[i] = gc->roots[gc->root_count - 1];
             gc->root_count -= 1;
+            (void)shrink_root_capacity_if_sparse(gc);
             return;
         }
     }
@@ -325,6 +370,7 @@ void nova_gc_collect_step(NovaGC *gc, size_t budget_objects) {
             grown = 1024;
         }
         gc->threshold_bytes = grown;
+        (void)shrink_mark_capacity_if_sparse(gc);
     }
 }
 
@@ -351,6 +397,8 @@ NovaGCStats nova_gc_stats(const NovaGC *gc) {
     stats.objects_marked = gc->objects_marked;
     stats.objects_swept = gc->objects_swept;
     stats.root_count = gc->root_count;
+    stats.root_capacity = gc->root_capacity;
+    stats.mark_capacity = gc->mark_capacity;
     stats.collection_in_progress = gc->collect_in_progress;
     return stats;
 }

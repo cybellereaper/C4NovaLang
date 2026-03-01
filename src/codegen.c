@@ -112,6 +112,13 @@ static void llvm_emitf(LLVMEmitter *emitter, const char *fmt, ...) {
 
 static bool emit_expr_llvm(LLVMEmitter *emitter, const NovaIRExpr *expr, char *value_buffer, size_t value_buffer_size);
 
+static const char *llvm_zero_literal(const char *type_name) {
+    if (strcmp(type_name, "double") == 0) return "0.0";
+    if (strcmp(type_name, "i1") == 0) return "0";
+    if (strcmp(type_name, "ptr") == 0) return "null";
+    return "0";
+}
+
 static bool emit_statement_llvm(LLVMEmitter *emitter, const NovaIRExpr *expr) {
     if (!expr) return true;
     if (expr->kind == NOVA_IR_EXPR_SEQUENCE) {
@@ -189,17 +196,47 @@ static bool emit_expr_llvm(LLVMEmitter *emitter, const NovaIRExpr *expr, char *v
         }
         return emit_expr_llvm(emitter, expr->as.sequence.items[expr->as.sequence.count - 1], value_buffer, value_buffer_size);
     }
-    case NOVA_IR_EXPR_IF:
-        if (expr->as.if_expr.condition && expr->as.if_expr.condition->kind == NOVA_IR_EXPR_BOOL) {
-            if (expr->as.if_expr.condition->as.bool_value) {
-                return emit_expr_llvm(emitter, expr->as.if_expr.then_branch, value_buffer, value_buffer_size);
-            }
-            return emit_expr_llvm(emitter,
-                                  expr->as.if_expr.else_branch ? expr->as.if_expr.else_branch : expr->as.if_expr.then_branch,
-                                  value_buffer,
-                                  value_buffer_size);
+    case NOVA_IR_EXPR_IF: {
+        char cond_value[64];
+        if (!emit_expr_llvm(emitter, expr->as.if_expr.condition, cond_value, sizeof(cond_value))) return false;
+
+        char then_label[32], else_label[32], end_label[32];
+        llvm_new_label(emitter, then_label, sizeof(then_label), "if.then.");
+        llvm_new_label(emitter, else_label, sizeof(else_label), "if.else.");
+        llvm_new_label(emitter, end_label, sizeof(end_label), "if.end.");
+
+        llvm_emitf(emitter, "  br i1 %s, label %%%s, label %%%s\n", cond_value, then_label, else_label);
+        llvm_emitf(emitter, "%s:\n", then_label);
+        char then_value[64];
+        if (!emit_expr_llvm(emitter, expr->as.if_expr.then_branch, then_value, sizeof(then_value))) return false;
+        llvm_emitf(emitter, "  br label %%%s\n", end_label);
+
+        llvm_emitf(emitter, "%s:\n", else_label);
+        char else_value[64];
+        if (expr->as.if_expr.else_branch) {
+            if (!emit_expr_llvm(emitter, expr->as.if_expr.else_branch, else_value, sizeof(else_value))) return false;
+        } else {
+            snprintf(else_value, sizeof(else_value), "%s", llvm_zero_literal(llvm_expr_type(emitter->semantics, expr)));
         }
-        return false;
+        llvm_emitf(emitter, "  br label %%%s\n", end_label);
+
+        llvm_emitf(emitter, "%s:\n", end_label);
+        const char *result_type = llvm_expr_type(emitter->semantics, expr);
+        if (strcmp(result_type, "void") == 0) {
+            snprintf(value_buffer, value_buffer_size, "0");
+            return true;
+        }
+        llvm_new_temp(emitter, value_buffer, value_buffer_size);
+        llvm_emitf(emitter,
+                   "  %s = phi %s [ %s, %%%s ], [ %s, %%%s ]\n",
+                   value_buffer,
+                   result_type,
+                   then_value,
+                   then_label,
+                   else_value,
+                   else_label);
+        return true;
+    }
     case NOVA_IR_EXPR_WHILE:
         return emit_statement_llvm(emitter, expr);
     case NOVA_IR_EXPR_STRING:
@@ -454,7 +491,7 @@ static int invoke_llvm_cc(const char *ir_path, const char *output_path, bool lin
     if (!cc || cc[0] == '\0') {
         cc = "clang";
     }
-    const char *common_flags = "-O3 -fno-plt -fomit-frame-pointer -DNDEBUG";
+    const char *common_flags = "-O3 -ffast-math -funroll-loops -fvectorize -fslp-vectorize -fno-plt -fomit-frame-pointer -DNDEBUG";
     char command[PATH_MAX * 4];
     if (link_executable) {
         snprintf(command, sizeof(command), "%s %s -x ir %s -Wl,--gc-sections -o %s", cc, common_flags, ir_path, output_path);

@@ -120,6 +120,26 @@ automatically.
 For continuous verification, the repository now includes a CI workflow that
 builds the toolchain and runs the test suite on every push.
 
+## Performance Benchmarks
+
+Run the benchmark harness with:
+
+```
+make bench
+```
+
+This writes JSON output to `bench/results/latest.json` for versioned workloads
+(`startup`, `json_parse`, `hashmap_hotloop`, `numeric_loop`,
+`concurrency_pingpong`). To run the regression gate against the checked-in
+baseline:
+
+```
+make bench-verify
+```
+
+See `BENCHMARKING.md` and `PERF.md` for reproducibility notes and optimization
+tracking.
+
 ## Next Steps
 
 The next milestones focus on broadening expression lowering in the IR,

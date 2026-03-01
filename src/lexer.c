@@ -203,13 +203,16 @@ static NovaToken lex_number(NovaLexer *lexer) {
     size_t start_pos = lexer->position;
     size_t line = lexer->line;
     size_t column = lexer->column;
-    while (nova_is_digit(peek(lexer))) {
-        advance(lexer);
+    while (lexer->position < lexer->length && nova_is_digit(lexer->source[lexer->position])) {
+        lexer->position++;
+        lexer->column++;
     }
-    if (peek(lexer) == '.') {
-        advance(lexer);
-        while (nova_is_digit(peek(lexer))) {
-            advance(lexer);
+    if (lexer->position < lexer->length && lexer->source[lexer->position] == '.') {
+        lexer->position++;
+        lexer->column++;
+        while (lexer->position < lexer->length && nova_is_digit(lexer->source[lexer->position])) {
+            lexer->position++;
+            lexer->column++;
         }
     }
     size_t length = lexer->position - start_pos;
@@ -220,8 +223,9 @@ static NovaToken lex_identifier(NovaLexer *lexer) {
     size_t start_pos = lexer->position;
     size_t line = lexer->line;
     size_t column = lexer->column;
-    while (nova_is_alnum_or_underscore(peek(lexer))) {
-        advance(lexer);
+    while (lexer->position < lexer->length && nova_is_alnum_or_underscore(lexer->source[lexer->position])) {
+        lexer->position++;
+        lexer->column++;
     }
     size_t length = lexer->position - start_pos;
     NovaTokenType type = NOVA_TOKEN_IDENTIFIER;

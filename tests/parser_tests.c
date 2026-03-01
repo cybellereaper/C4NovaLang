@@ -395,6 +395,26 @@ static void test_lexer_large_input_tokenization(void) {
     free(source);
 }
 
+static void test_lexer_identifier_numeric_fastpath_boundaries(void) {
+    const char *source = "alpha123 beta_456\n98765 42.125 _tail";
+    NovaTokenArray tokens = nova_lexer_tokenize(source);
+    assert(tokens.size == 6);
+
+    assert(tokens.data[0].type == NOVA_TOKEN_IDENTIFIER);
+    assert(token_matches(&tokens.data[0], "alpha123"));
+    assert(tokens.data[1].type == NOVA_TOKEN_IDENTIFIER);
+    assert(token_matches(&tokens.data[1], "beta_456"));
+    assert(tokens.data[2].type == NOVA_TOKEN_NUMBER);
+    assert(token_matches(&tokens.data[2], "98765"));
+    assert(tokens.data[3].type == NOVA_TOKEN_NUMBER);
+    assert(token_matches(&tokens.data[3], "42.125"));
+    assert(tokens.data[4].type == NOVA_TOKEN_IDENTIFIER);
+    assert(token_matches(&tokens.data[4], "_tail"));
+    assert(tokens.data[5].type == NOVA_TOKEN_EOF);
+
+    nova_token_array_free(&tokens);
+}
+
 static void test_match_exhaustiveness_warning(void) {
     const char *source =
         "module demo.flags\n"
@@ -535,6 +555,120 @@ static void test_aot_executable_generation(void) {
     nova_program_free(program);
     free(program);
     nova_parser_free(&parser);
+}
+
+static void test_llvm_backend_codegen(void) {
+    char template[] = "build/nova_llvmXXXXXX";
+    char *dir = make_temp_dir(template);
+    assert(dir != NULL);
+
+    const char *source =
+        "module demo.llvm\n"
+        "fun app_entry(): Number = 9\n";
+
+    NovaParser parser;
+    nova_parser_init(&parser, source);
+    NovaProgram *program = nova_parser_parse(&parser);
+    assert(program != NULL);
+
+    NovaSemanticContext ctx;
+    nova_semantic_context_init(&ctx);
+    nova_semantic_analyze_program(&ctx, program);
+    assert(ctx.diagnostics.count == 0);
+
+    NovaIRProgram *ir = nova_ir_lower(program, &ctx);
+    assert(ir != NULL);
+
+    nova_setenv("NOVA_CODEGEN_BACKEND", "llvm");
+    char object_path[PATH_MAX];
+    snprintf(object_path, sizeof(object_path), "%s/demo.o", dir);
+    char error[256] = {0};
+    bool ok = nova_codegen_emit_object(ir, &ctx, object_path, error, sizeof(error));
+    assert(ok && "LLVM object emission failed");
+
+    struct stat st;
+    assert(stat(object_path, &st) == 0);
+
+    char exe_path[PATH_MAX];
+    snprintf(exe_path, sizeof(exe_path), "%s/demo-bin", dir);
+    ok = nova_codegen_emit_executable(ir, &ctx, exe_path, "app_entry", error, sizeof(error));
+    assert(ok && "LLVM executable emission failed");
+    assert(stat(exe_path, &st) == 0);
+
+#ifndef _WIN32
+    char run_cmd[PATH_MAX * 2];
+    snprintf(run_cmd, sizeof(run_cmd), "%s", exe_path);
+    int rc = system(run_cmd);
+    assert(WIFEXITED(rc));
+    assert(WEXITSTATUS(rc) == 9);
+#endif
+
+    nova_setenv("NOVA_CODEGEN_BACKEND", NULL);
+    remove(object_path);
+    remove(exe_path);
+
+    nova_ir_free(ir);
+    nova_semantic_context_free(&ctx);
+    nova_program_free(program);
+    free(program);
+    nova_parser_free(&parser);
+
+    char cleanup_cmd[PATH_MAX * 2];
+    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf %s", dir);
+    system(cleanup_cmd);
+}
+
+
+static void test_llvm_backend_stability_stress(void) {
+    char *source = build_mock_stress_program(180, 20);
+    assert(source != NULL);
+
+    NovaParser parser;
+    nova_parser_init(&parser, source);
+    NovaProgram *program = nova_parser_parse(&parser);
+    assert(program != NULL);
+
+    NovaSemanticContext ctx;
+    nova_semantic_context_init(&ctx);
+    nova_semantic_analyze_program(&ctx, program);
+    assert(ctx.diagnostics.count == 0);
+
+    NovaIRProgram *ir = nova_ir_lower(program, &ctx);
+    assert(ir != NULL);
+
+    nova_setenv("NOVA_CODEGEN_BACKEND", "llvm");
+    for (size_t i = 0; i < 4; ++i) {
+        char object_path[PATH_MAX];
+        snprintf(object_path, sizeof(object_path), "build/llvm-stress-%zu.o", i);
+        char error[256] = {0};
+        bool ok = nova_codegen_emit_object(ir, &ctx, object_path, error, sizeof(error));
+        assert(ok && "LLVM stress object emission failed");
+
+        struct stat st;
+        assert(stat(object_path, &st) == 0);
+        remove(object_path);
+    }
+
+    char error[256] = {0};
+    const char *exe_path = "build/llvm-stress-bin";
+    bool ok = nova_codegen_emit_executable(ir, &ctx, exe_path, "run_179", error, sizeof(error));
+    assert(ok && "LLVM stress executable emission failed");
+
+#ifndef _WIN32
+    int rc = system("./build/llvm-stress-bin");
+    assert(WIFEXITED(rc));
+    assert(WEXITSTATUS(rc) == 180);
+#endif
+
+    nova_setenv("NOVA_CODEGEN_BACKEND", NULL);
+    remove(exe_path);
+
+    nova_ir_free(ir);
+    nova_semantic_context_free(&ctx);
+    nova_program_free(program);
+    free(program);
+    nova_parser_free(&parser);
+    free(source);
 }
 
 static void test_codegen_pipeline(void) {
@@ -881,9 +1015,12 @@ int main(void) {
     test_parser_and_semantics();
     test_lexer_keyword_classification();
     test_lexer_large_input_tokenization();
+    test_lexer_identifier_numeric_fastpath_boundaries();
     test_match_exhaustiveness_warning();
     test_codegen_uses_low_latency_flags();
     test_aot_executable_generation();
+    test_llvm_backend_codegen();
+    test_llvm_backend_stability_stress();
     test_codegen_pipeline();
     test_ir_lowering_extensions();
     test_ir_control_flow_optimizations();

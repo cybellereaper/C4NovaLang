@@ -1,0 +1,36 @@
+{
+  "commit": "81a6b95",
+  "benchmarks": {
+    "startup": {
+      "iterations": 2500,
+      "elapsed_ms": 12.703,
+      "ns_per_op": 5081.1
+    },
+    "json_parse": {
+      "iterations": 1500,
+      "elapsed_ms": 51.564,
+      "ns_per_op": 34376.0
+    },
+    "hashmap_hotloop": {
+      "iterations": 1500,
+      "elapsed_ms": 32.65,
+      "ns_per_op": 21766.6
+    },
+    "numeric_loop": {
+      "iterations": 2000,
+      "elapsed_ms": 31.291,
+      "ns_per_op": 15645.5
+    },
+    "concurrency_pingpong": {
+      "iterations": 1500,
+      "elapsed_ms": 15.168,
+      "ns_per_op": 10112.0
+    }
+  },
+  "machine": {
+    "os": "Linux-6.12.47-x86_64-with-glibc2.39",
+    "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+    "cflags": "-std=c11 -Wall -Wextra -Iinclude"
+  }
+}

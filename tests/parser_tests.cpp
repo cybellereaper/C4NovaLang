@@ -133,14 +133,14 @@ static void nova_setenv(const char *name, const char *value) {
 #endif
 }
 
-static char *make_temp_dir(char *template) {
-    size_t len = strlen(template);
-    char *x_start = strchr(template, 'X');
+static char *make_temp_dir(char *path_template) {
+    size_t len = strlen(path_template);
+    char *x_start = strchr(path_template, 'X');
     if (!x_start) {
         errno = EINVAL;
         return NULL;
     }
-    size_t x_count = len - (size_t)(x_start - template);
+    size_t x_count = len - (size_t)(x_start - path_template);
     static unsigned long counter = 0;
     for (int attempt = 0; attempt < 4096; ++attempt) {
         unsigned long value = (unsigned long)nova_process_id() + counter + (unsigned long)attempt;
@@ -149,9 +149,9 @@ static char *make_temp_dir(char *template) {
             value /= 36;
             x_start[i] = (digit < 10) ? (char)('0' + digit) : (char)('a' + (digit - 10));
         }
-        if (nova_mkdir(template, 0700) == 0) {
+        if (nova_mkdir(path_template, 0700) == 0) {
             counter += (unsigned long)(attempt + 1);
-            return template;
+            return path_template;
         }
         if (errno != EEXIST) {
             return NULL;
@@ -420,8 +420,8 @@ static void test_match_exhaustiveness_warning(void) {
 
 
 static void test_codegen_uses_low_latency_flags(void) {
-    char template[] = "build/nova_ccXXXXXX";
-    char *dir = make_temp_dir(template);
+    char path_template[] = "build/nova_ccXXXXXX";
+    char *dir = make_temp_dir(path_template);
     assert(dir != NULL);
 
     char cc_path[PATH_MAX];
@@ -538,8 +538,8 @@ static void test_aot_executable_generation(void) {
 }
 
 static void test_llvm_backend_codegen(void) {
-    char template[] = "build/nova_llvmXXXXXX";
-    char *dir = make_temp_dir(template);
+    char path_template[] = "build/nova_llvmXXXXXX";
+    char *dir = make_temp_dir(path_template);
     assert(dir != NULL);
 
     const char *source =
@@ -781,8 +781,8 @@ static void test_ir_control_flow_optimizations(void) {
 }
 
 static void test_project_generator(void) {
-    char template[] = "build/nova_projXXXXXX";
-    char *project_dir = make_temp_dir(template);
+    char path_template[] = "build/nova_projXXXXXX";
+    char *project_dir = make_temp_dir(path_template);
     assert(project_dir != NULL);
 
     char command[PATH_MAX * 2];
@@ -886,8 +886,8 @@ static void test_while_loop_codegen(void) {
 }
 
 static void test_stability_checker_cli(void) {
-    char template[] = "build/nova_checkXXXXXX";
-    char *check_dir = make_temp_dir(template);
+    char path_template[] = "build/nova_checkXXXXXX";
+    char *check_dir = make_temp_dir(path_template);
     assert(check_dir != NULL);
 
     char source_path[PATH_MAX];
